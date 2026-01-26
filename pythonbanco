@@ -1,0 +1,34 @@
+import sqlite3
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Lista todos os arquivos .db na pasta para te ajudar a conferir
+arquivos_db = [f for f in os.listdir(BASE_DIR) if f.endswith('.db')]
+print(f"Arquivos de banco encontrados: {arquivos_db}")
+
+# COLOQUE AQUI O NOME EXATO DO SEU BANCO ORIGINAL (Ex: 'abaseflex.db')
+NOME_BANCO_REAL = 'teste.db' 
+DB_PATH = os.path.join(BASE_DIR, NOME_BANCO_REAL)
+
+def ajustar():
+    if not os.path.exists(DB_PATH):
+        print(f"❌ Erro: O arquivo '{NOME_BANCO_REAL}' não foi encontrado na pasta {BASE_DIR}")
+        return
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        # Tenta criar a coluna
+        conn.execute('ALTER TABLE vendas ADD COLUMN arquivo_nfe TEXT')
+        conn.commit()
+        print(f"✅ SUCESSO! Coluna adicionada no banco: {NOME_BANCO_REAL}")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            print(f"⚠️ A coluna já existe no banco {NOME_BANCO_REAL}.")
+        else:
+            print(f"❌ Erro de SQL: {e}")
+    finally:
+        conn.close()
+
+if __name__ == "__main__":
+    ajustar()
