@@ -1,0 +1,477 @@
+from flask import Flask, render_template, request, redirect
+import sqlite3
+import os
+from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+
+# --- CONFIGURAÇÕES DE DIRETÓRIO E BANCO ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'teste.db')
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Garante que a pasta de uploads exista fisicamente
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# --- ROTAS DE NAVEGAÇÃO PRINCIPAL ---
+@app.route('/')
+def index():
+    return render_template('menu.html')
+
+# --- GESTÃO DE CLIENTES ---
+
+# No seu arquivo app.py
+# --- GESTÃO DE CLIENTES ATUALIZADA COM PAGINAÇÃO ---
+
+@app.route('/clientes_page')
+def clientes_page():
+    # 1. Pega o número da página atual da URL (padrão é 1 se não houver)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # Define o limite de 10 clientes por tela
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    # 2. Busca apenas os 10 clientes daquela página
+    clientes = conn.execute('SELECT * FROM cliente ORDER BY nome ASC LIMIT ? OFFSET ?', 
+                            (per_page, offset)).fetchall()
+    
+    # 3. Conta quantos clientes existem no total para calcular as páginas
+    total = conn.execute('SELECT COUNT(*) FROM cliente').fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+
+    conn.close()
+    
+    # 4. ENVIA AS VARIÁVEIS 'page' e 'total_pages' PARA O HTML
+    return render_template('cliente.html', 
+                           clientes=clientes, 
+                           page=page, 
+                           total_pages=total_pages)
+
+@app.route('/cadastrar_cliente', methods=['POST'])
+def cadastrar_cliente():
+    dados = (
+        request.form.get('nome'), request.form.get('cnpj_cpf'),
+        request.form.get('ie'), request.form.get('cep'),
+        request.form.get('rua'), request.form.get('cidade'),
+        request.form.get('estado')
+    )
+    conn = get_db_connection()
+    conn.execute('INSERT INTO cliente VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)', dados)
+    conn.commit()
+    conn.close()
+    return redirect('/clientes_page')
+
+@app.route('/excluir_cliente/<int:id>')
+def excluir_cliente(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM cliente WHERE id_cliente = ?', (id,))
+    conn.commit()
+    conn.close()
+    return redirect('/clientes_page')
+
+# --- GESTÃO DE PRODUTOS ---
+@app.route('/produtos')
+def produtos():
+    # 1. Pega a página atual e define o limite (10 itens)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    # 2. Busca apenas os produtos da página
+    lista = conn.execute('SELECT * FROM produto ORDER BY categoria ASC, modelo ASC LIMIT ? OFFSET ?', 
+                         (per_page, offset)).fetchall()
+    
+    # 3. Calcula o total de páginas
+    total = conn.execute('SELECT COUNT(*) FROM produto').fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+    
+    conn.close()
+    
+    # 4. Envia as variáveis para o HTML
+    return render_template('produtos.html', produtos=lista, page=page, total_pages=total_pages)
+
+@app.route('/cadastrar_produto', methods=['POST'])
+def cadastrar_produto():
+    conn = get_db_connection()
+    conn.execute('INSERT INTO produto (categoria, modelo, marca) VALUES (?, ?, ?)', 
+                 (request.form.get('categoria'), request.form.get('modelo'), request.form.get('marca')))
+    conn.commit()
+    conn.close()
+    return redirect('/produtos')
+
+@app.route('/excluir_produto/<int:id>')
+def excluir_produto(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM produto WHERE id_produto = ?', (id,))
+    conn.commit()
+    conn.close()
+    return redirect('/produtos')
+
+# --- GESTÃO DE VENDAS E ARQUIVOS ---
+@app.route('/vendas')
+def vendas():
+    # 1. Pega a página atual e define o limite (10 NFEs por tela)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    c = conn.execute('SELECT id_cliente, nome FROM cliente ORDER BY nome ASC').fetchall()
+    p = conn.execute("SELECT id_produto, (categoria || ' ' || modelo) as nome_completo, marca FROM produto").fetchall()
+    
+    # 2. SQL Agrupado com LIMIT e OFFSET para a paginação
+    h = conn.execute('''
+        SELECT 
+            v.nfe, 
+            v.datavenda, 
+            c.nome as nome_cliente, 
+            GROUP_CONCAT(p.categoria || ' ' || p.modelo, ' + ') as nome_produto, 
+            SUM(v.quantidade) as total_qtd, 
+            SUM(v.total) as total_geral, 
+            v.forma_pagto,
+            v.arquivo_nfe
+        FROM vendas v
+        JOIN cliente c ON v.id_cliente = c.id_cliente
+        JOIN produto p ON v.id_produto = p.id_produto
+        GROUP BY v.nfe, v.datavenda, c.nome, v.forma_pagto
+        ORDER BY v.datavenda DESC, v.nfe DESC
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+
+    # 3. Calcula o total de páginas baseado no número único de notas fiscais
+    total_nfes = conn.execute('SELECT COUNT(DISTINCT nfe) FROM vendas').fetchone()[0]
+    total_pages = (total_nfes + per_page - 1) // per_page
+    
+    conn.close()
+    
+    # 4. Retorna todas as variáveis que o seu HTML agora exige
+    return render_template('vendas.html', 
+                           clientes=c, 
+                           produtos=p, 
+                           vendas=h, 
+                           page=page, 
+                           total_pages=total_pages)
+
+@app.route('/salvar_venda', methods=['POST'])
+def salvar_venda():
+    nfe = request.form.get('nfe')
+    
+    conn = get_db_connection()
+    
+    # --- TRAVA DE SEGURANÇA: Verifica se a NFE já existe ---
+    venda_existente = conn.execute('SELECT nfe FROM vendas WHERE nfe = ?', (nfe,)).fetchone()
+    if venda_existente:
+        conn.close()
+        return f"""
+        <script>
+            alert('⚠️ ERRO: A NFE {nfe} já está cadastrada!');
+            window.location.href = '/vendas';
+        </script>
+        """
+    # ---------------------------------------------------------------------------------------------------
+
+    data_venda_str = request.form.get('datavenda')
+    id_cliente = request.form.get('id_cliente')
+    forma_pagto_original = request.form.get('forma_pagto', '0')
+    forma_pagto_limpa = forma_pagto_original.lower().replace('dias', '').strip()
+    
+    produtos_ids = request.form.getlist('id_produto[]')
+    quantidades = request.form.getlist('quantidade[]')
+    valores_un_raw = request.form.getlist('valorproduto[]')
+    
+    total_geral_nfe = 0
+    
+    try:
+        # 1. LOOP DE ITENS: Salva os produtos individualmente na tabela Vendas
+        for i in range(len(produtos_ids)):
+            if not produtos_ids[i]: continue 
+            
+            v_un = float(valores_un_raw[i].replace('.', '').replace(',', '.'))
+            qtd = float(quantidades[i])
+            subtotal_item = v_un * qtd
+            total_geral_nfe += subtotal_item  # Soma o valor total da nota fiscal
+
+            conn.execute("""
+                INSERT INTO vendas (nfe, datavenda, id_cliente, id_produto, quantidade, valorproduto, total, forma_pagto)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (nfe, data_venda_str, id_cliente, produtos_ids[i], qtd, v_un, subtotal_item, forma_pagto_original))
+
+        # 2. LANÇAMENTO FINANCEIRO ÚNICO (Fora do loop de itens)
+        termos_a_vista = ['a vista', 'avista', 'pix', 'dinheiro', 'debito', 'débito', '0']
+        
+        if forma_pagto_limpa in termos_a_vista:
+            conn.execute("""
+                INSERT INTO contas_a_Receber (id_cliente, valor, num_doc, dt_vencimento, dt_pagto, status)
+                VALUES (?, ?, ?, ?, ?, 'PAGO')
+            """, (id_cliente, total_geral_nfe, f"{nfe} (À VISTA)", data_venda_str, data_venda_str))
+        else:
+            prazos = forma_pagto_limpa.split('/')
+            valor_parcela = round(total_geral_nfe / len(prazos), 2)
+            data_venda_dt = datetime.strptime(data_venda_str, '%Y-%m-%d')
+            
+            for i, dias in enumerate(prazos):
+                vencimento = data_venda_dt + timedelta(days=int(dias.strip()))
+                conn.execute("""
+                    INSERT INTO contas_a_Receber (id_cliente, valor, num_doc, dt_vencimento, status)
+                    VALUES (?, ?, ?, ?, 'PENDENTE')
+                """, (id_cliente, valor_parcela, f"{nfe} ({i+1}/{len(prazos)})", vencimento.strftime('%Y-%m-%d')))
+        
+        conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+        return f"<h1>Erro ao salvar:</h1><p>{e}</p>"
+    finally:
+        conn.close()
+    return redirect('/vendas')
+
+@app.route('/upload_nfe/<nfe>', methods=['POST'])
+def upload_nfe(nfe):
+    if 'file' not in request.files: return redirect('/vendas')
+    file = request.files['file']
+    if file and file.filename != '':
+        filename = secure_filename(f"NF_{nfe}_{file.filename.replace(' ', '_')}")
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
+        conn = get_db_connection()
+        conn.execute("UPDATE vendas SET arquivo_nfe = ? WHERE nfe = ?", (filename, nfe))
+        conn.commit()
+        conn.close()
+    return redirect('/vendas')
+
+@app.route('/excluir_nfe/<nfe>')
+def excluir_nfe(nfe):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM vendas WHERE nfe = ?', (nfe,))
+    conn.execute("DELETE FROM contas_a_Receber WHERE num_doc LIKE ?", (f"{nfe}%",))
+    conn.commit()
+    conn.close()
+    return redirect('/vendas')
+
+
+@app.route('/vendas_insights')
+def vendas_insights():
+    conn = get_db_connection()
+    
+    # 1. Produtos que mais vendem (Quantidade bruta)
+    ranking_produtos = conn.execute('''
+        SELECT p.categoria || ' ' || p.modelo as produto, SUM(v.quantidade) as total_qtd
+        FROM vendas v
+        JOIN produto p ON v.id_produto = p.id_produto
+        GROUP BY produto
+        ORDER BY total_qtd DESC LIMIT 10
+    ''').fetchall()
+
+    # 2. Clientes "VIP" (Quem mais gastou dinheiro)
+    ranking_clientes = conn.execute('''
+        SELECT c.nome, SUM(v.total) as total_gasto
+        FROM vendas v
+        JOIN cliente c ON v.id_cliente = c.id_cliente
+        GROUP BY c.nome
+        ORDER BY total_gasto DESC LIMIT 10
+    ''').fetchall()
+
+    # 3. Clientes Mais Fiéis (Quem mais vezes fez pedidos - frequência)
+    ranking_fidelidade = conn.execute('''
+        SELECT c.nome, COUNT(DISTINCT v.nfe) as total_pedidos
+        FROM vendas v
+        JOIN cliente c ON v.id_cliente = c.id_cliente
+        GROUP BY c.nome
+        ORDER BY total_pedidos DESC LIMIT 10
+    ''').fetchall()
+
+    conn.close()
+    return render_template('vendas_insights.html', 
+                           produtos=ranking_produtos, 
+                           clientes=ranking_clientes, 
+                           fidelidade=ranking_fidelidade)
+from datetime import datetime
+from flask import request, render_template, redirect, url_for
+
+# --- FINANCEIRO: MENU PRINCIPAL ---
+@app.route('/financeiro')
+def financeiro():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    contas = conn.execute('''
+        SELECT id_contaP, nome_custo, valor, dt_vencimento, status 
+        FROM contas_a_Pagar 
+        ORDER BY status DESC, dt_vencimento ASC 
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+
+    total = conn.execute('SELECT COUNT(*) FROM contas_a_Pagar').fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+    
+    conn.close()
+    
+    # Renderiza o menu consolidado
+    return render_template('financeiro_menu.html', contas=contas, page=page, total_pages=total_pages)
+
+
+# --- FINANCEIRO: CONTAS A RECEBER ---
+@app.route('/contas_receber')
+def exibir_contas_receber():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
+    conn = get_db_connection()
+    contas = conn.execute('''
+        SELECT cr.*, c.nome FROM contas_a_Receber cr 
+        JOIN cliente c ON cr.id_cliente = c.id_cliente 
+        ORDER BY cr.dt_vencimento ASC LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+    total = conn.execute('SELECT COUNT(*) FROM contas_a_Receber').fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+    conn.close()
+    return render_template('contas_receber.html', contas=contas, page=page, total_pages=total_pages)
+
+@app.route('/baixar_recebimento/<int:id>')
+def baixar_recebimento(id):
+    conn = get_db_connection()
+    conn.execute("UPDATE contas_a_Receber SET status = 'PAGO', dt_pagto = date('now') WHERE id_contaR = ?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('exibir_contas_receber'))
+
+@app.route('/excluir_recebimento/<int:id>')
+def excluir_recebimento(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM contas_a_Receber WHERE id_contaR = ?', (id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('exibir_contas_receber'))
+
+@app.template_filter('datetime_hoje')
+def datetime_hoje(n):
+    return datetime.now().strftime('%Y-%m-%d')
+
+@app.route('/contas_pagar')
+def exibir_contas_pagar():
+    # Coleta a página atual para a paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    # Busca apenas registros pendentes limitados por página
+    contas = conn.execute('''
+        SELECT * FROM contas_a_Pagar 
+        WHERE status = 'PENDENTE' 
+        ORDER BY dt_vencimento ASC 
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+
+    # Cálculo do total de páginas para o HTML
+    total_pendentes = conn.execute("SELECT COUNT(*) FROM contas_a_Pagar WHERE status = 'PENDENTE'").fetchone()[0]
+    total_pages = (total_pendentes + per_page - 1) // per_page
+    
+    conn.close()
+    return render_template('contas_pagar.html', contas=contas, page=page, total_pages=total_pages)
+
+# --- AÇÕES: PAGAMENTOS ---
+
+
+@app.route('/salvar_pagamento', methods=['POST'])
+def salvar_pagamento():
+    # Coleta os dados enviados pelo formulário HTML
+    categoria = request.form.get('categoria')
+    nome_custo = request.form.get('nome_custo')
+    
+    # Tratamento de moeda: Remove o ponto de milhar e troca a vírgula pelo ponto decimal
+    valor_raw = request.form.get('valor')
+    valor = float(valor_raw.replace('.', '').replace(',', '.'))
+    
+    num_doc = request.form.get('num_doc')
+    # Captura a condição de pagamento (Ex: 1x, Mensal) para a coluna obrigatória do banco
+    condicao = request.form.get('condicao_pagamento') 
+    dt_vencimento = request.form.get('dt_vencimento')
+
+    conn = get_db_connection()
+    
+    # Executa o INSERT garantindo que o nome da coluna 'Condição_pagamento' esteja correto
+    conn.execute('''
+        INSERT INTO contas_a_Pagar (
+            categoria, 
+            nome_custo, 
+            valor, 
+            num_doc, 
+            Condição_pagamento, 
+            dt_vencimento, 
+            status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 'PENDENTE')
+    ''', (categoria, nome_custo, valor, num_doc, condicao, dt_vencimento))
+    
+    conn.commit()
+    conn.close()
+    
+    # Redireciona de volta para a listagem de contas a pagar
+    return redirect('/contas_pagar')
+
+
+@app.route('/baixar_pagamento/<int:id>')
+def baixar_pagamento(id):
+    conn = get_db_connection()
+    conn.execute("UPDATE contas_a_Pagar SET status = 'PAGO', dt_pagto = date('now') WHERE id_contaP = ?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect('/contas_pagar')
+
+@app.route('/excluir_pagamento/<int:id>')
+def excluir_pagamento(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM contas_a_Pagar WHERE id_contaP = ?', (id,))
+    conn.commit()
+    conn.close()
+    return redirect('/contas_pagar')
+
+
+# --- DASHBOARD DE FATURAMENTO (INSIGHTS) ---
+@app.route('/faturamento', methods=['GET', 'POST'])
+def faturamento():
+    conn = get_db_connection()
+    data_inicio = request.form.get('data_inicio')
+    data_fim = request.form.get('data_fim')
+    total_periodo = 0
+
+    if data_inicio and data_fim:
+        resultado = conn.execute('''
+            SELECT SUM(total) as total 
+            FROM vendas 
+            WHERE datavenda BETWEEN ? AND ?
+        ''', (data_inicio, data_fim)).fetchone()
+        total_periodo = resultado['total'] if resultado['total'] else 0
+
+    recebido = conn.execute("SELECT SUM(valor) FROM contas_a_Receber WHERE status = 'PAGO'").fetchone()[0] or 0
+    pago = conn.execute("SELECT SUM(valor) FROM contas_a_Pagar WHERE status = 'PAGO'").fetchone()[0] or 0
+    pendente_r = conn.execute("SELECT SUM(valor) FROM contas_a_Receber WHERE status = 'PENDENTE'").fetchone()[0] or 0
+    pendente_p = conn.execute("SELECT SUM(valor) FROM contas_a_Pagar WHERE status = 'PENDENTE'").fetchone()[0] or 0
+    
+    saldo = recebido - pago
+
+    vendas_list = conn.execute('SELECT num_doc, valor FROM contas_a_Receber WHERE status = "PAGO" ORDER BY id_contaR DESC LIMIT 5').fetchall()
+    gastos_list = conn.execute('SELECT nome_custo, valor FROM contas_a_Pagar WHERE status = "PAGO" ORDER BY id_contaP DESC LIMIT 5').fetchall()
+
+    conn.close()
+    return render_template('faturamento.html', 
+                           total_periodo=total_periodo, inicio=data_inicio, fim=data_fim,
+                           recebido=recebido, pago=pago, saldo=saldo,
+                           pendente_r=pendente_r, pendente_p=pendente_p,
+                           vendas=vendas_list, gastos=gastos_list)
+if __name__ == '__main__':
+    app.run(debug=True)
