@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # --- CONFIGURAÇÕES DE DIRETÓRIO E BANCO ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'teste.db')
+DB_PATH = os.path.join(BASE_DIR, 'sistema.db')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -328,14 +328,22 @@ def exibir_contas_receber():
     page = request.args.get('page', 1, type=int)
     per_page = 10
     offset = (page - 1) * per_page
+
     conn = get_db_connection()
+    
+    # BUSCA APENAS O QUE É PENDENTE
     contas = conn.execute('''
-        SELECT cr.*, c.nome FROM contas_a_Receber cr 
-        JOIN cliente c ON cr.id_cliente = c.id_cliente 
-        ORDER BY cr.dt_vencimento ASC LIMIT ? OFFSET ?
+        SELECT * FROM contas_a_receber 
+        WHERE status = 'PENDENTE' 
+        ORDER BY dt_vencimento ASC 
+        LIMIT ? OFFSET ?
     ''', (per_page, offset)).fetchall()
-    total = conn.execute('SELECT COUNT(*) FROM contas_a_Receber').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
+
+    # CONTA APENAS O QUE É PENDENTE PARA A PAGINAÇÃO
+    total_query = conn.execute("SELECT COUNT(*) FROM contas_a_receber WHERE status = 'PENDENTE'").fetchone()
+    total_pendentes = total_query[0] if total_query else 0
+    total_pages = max(1, (total_pendentes + per_page - 1) // per_page)
+    
     conn.close()
     return render_template('contas_receber.html', contas=contas, page=page, total_pages=total_pages)
 
@@ -359,6 +367,30 @@ def excluir_recebimento(id):
 def datetime_hoje(n):
     return datetime.now().strftime('%Y-%m-%d')
 
+@app.route('/historico_recebimentos')
+def historico_recebimentos():
+    page = request.args.get('page', 1, type=int)
+    per_page = 15
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    # IMPORTANTE: Filtramos por 'PAGO' para bater com o que está no seu banco
+    contas_recebidas = conn.execute('''
+        SELECT * FROM contas_a_receber 
+        WHERE status = 'PAGO' 
+        ORDER BY dt_vencimento DESC 
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+
+    total_query = conn.execute("SELECT COUNT(*) FROM contas_a_receber WHERE status = 'PAGO'").fetchone()
+    total_recebidos = total_query[0] if total_query else 0
+    total_pages = max(1, (total_recebidos + per_page - 1) // per_page)
+    
+    conn.close()
+    return render_template('historico_recebidos.html', contas=contas_recebidas, page=page, total_pages=total_pages)
+
+# --- FINANCEIRO: CONTAS A PAGAR (LISTAGEM PENDENTE) ---
 @app.route('/contas_pagar')
 def exibir_contas_pagar():
     # Coleta a página atual para a paginação
@@ -368,7 +400,7 @@ def exibir_contas_pagar():
 
     conn = get_db_connection()
     
-    # Busca apenas registros pendentes limitados por página
+    # Busca apenas registros pendentes limitados por página e ordenados
     contas = conn.execute('''
         SELECT * FROM contas_a_Pagar 
         WHERE status = 'PENDENTE' 
@@ -376,53 +408,46 @@ def exibir_contas_pagar():
         LIMIT ? OFFSET ?
     ''', (per_page, offset)).fetchall()
 
-    # Cálculo do total de páginas para o HTML
-    total_pendentes = conn.execute("SELECT COUNT(*) FROM contas_a_Pagar WHERE status = 'PENDENTE'").fetchone()[0]
-    total_pages = (total_pendentes + per_page - 1) // per_page
+    # Cálculo do total de páginas baseado APENAS nos registros pendentes
+    total_query = conn.execute("SELECT COUNT(*) FROM contas_a_Pagar WHERE status = 'PENDENTE'").fetchone()
+    total_pendentes = total_query[0] if total_query else 0
+    
+    # Calcula o número total de páginas (mínimo 1)
+    total_pages = max(1, (total_pendentes + per_page - 1) // per_page)
     
     conn.close()
-    return render_template('contas_pagar.html', contas=contas, page=page, total_pages=total_pages)
+    
+    # Retorna os dados para o template
+    return render_template('contas_pagar.html', 
+                           contas=contas, 
+                           page=page, 
+                           total_pages=total_pages)
 
 # --- AÇÕES: PAGAMENTOS ---
 
 
 @app.route('/salvar_pagamento', methods=['POST'])
 def salvar_pagamento():
-    # Coleta os dados enviados pelo formulário HTML
     categoria = request.form.get('categoria')
     nome_custo = request.form.get('nome_custo')
     
-    # Tratamento de moeda: Remove o ponto de milhar e troca a vírgula pelo ponto decimal
     valor_raw = request.form.get('valor')
     valor = float(valor_raw.replace('.', '').replace(',', '.'))
     
+    # num_doc capturado do novo formulário
     num_doc = request.form.get('num_doc')
-    # Captura a condição de pagamento (Ex: 1x, Mensal) para a coluna obrigatória do banco
-    condicao = request.form.get('condicao_pagamento') 
     dt_vencimento = request.form.get('dt_vencimento')
 
     conn = get_db_connection()
-    
-    # Executa o INSERT garantindo que o nome da coluna 'Condição_pagamento' esteja correto
+    # Removemos 'Condição_pagamento' do INSERT já que o campo saiu do formulário
     conn.execute('''
-        INSERT INTO contas_a_Pagar (
-            categoria, 
-            nome_custo, 
-            valor, 
-            num_doc, 
-            Condição_pagamento, 
-            dt_vencimento, 
-            status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, 'PENDENTE')
-    ''', (categoria, nome_custo, valor, num_doc, condicao, dt_vencimento))
+        INSERT INTO contas_a_Pagar (categoria, nome_custo, valor, num_doc, dt_vencimento, status)
+        VALUES (?, ?, ?, ?, ?, 'PENDENTE')
+    ''', (categoria, nome_custo, valor, num_doc, dt_vencimento))
     
     conn.commit()
     conn.close()
-    
-    # Redireciona de volta para a listagem de contas a pagar
     return redirect('/contas_pagar')
-
 
 @app.route('/baixar_pagamento/<int:id>')
 def baixar_pagamento(id):
@@ -439,6 +464,33 @@ def excluir_pagamento(id):
     conn.commit()
     conn.close()
     return redirect('/contas_pagar')
+
+
+@app.route('/historico_pagamentos')
+def historico_pagamentos():
+    # Coleta página atual para manter a organização
+    page = request.args.get('page', 1, type=int)
+    per_page = 15
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    
+    # Busca apenas o que já foi PAGO
+    contas_pagas = conn.execute('''
+        SELECT * FROM contas_a_Pagar 
+        WHERE status = 'PAGO' 
+        ORDER BY dt_vencimento DESC 
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset)).fetchall()
+
+    # Conta total de pagos para a paginação
+    total_pagos = conn.execute("SELECT COUNT(*) FROM contas_a_Pagar WHERE status = 'PAGO'").fetchone()[0]
+    total_pages = max(1, (total_pagos + per_page - 1) // per_page)
+    
+    conn.close()
+    
+    # Você pode criar um HTML novo (historico_pagos.html) ou reutilizar o atual com uma trava
+    return render_template('historico_pagos.html', contas=contas_pagas, page=page, total_pages=total_pages)
 
 
 # --- DASHBOARD DE FATURAMENTO (INSIGHTS) ---
