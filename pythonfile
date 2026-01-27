@@ -1,10 +1,13 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, flash, url_for
 import sqlite3
 import os
+import re
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
+
 
 # --- CONFIGURAÇÕES DE DIRETÓRIO E BANCO ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,44 +33,114 @@ def index():
 # No seu arquivo app.py
 # --- GESTÃO DE CLIENTES ATUALIZADA COM PAGINAÇÃO ---
 
+import re
+from flask import request, render_template
+
 @app.route('/clientes_page')
 def clientes_page():
-    # 1. Pega o número da página atual da URL (padrão é 1 se não houver)
     page = request.args.get('page', 1, type=int)
-    per_page = 10  # Define o limite de 10 clientes por tela
+    per_page = 10
     offset = (page - 1) * per_page
 
+    cnpj_busca = (request.args.get('cnpj') or '').strip()
+    cnpj_norm = re.sub(r'\D', '', cnpj_busca)
+
     conn = get_db_connection()
-    
-    # 2. Busca apenas os 10 clientes daquela página
-    clientes = conn.execute('SELECT * FROM cliente ORDER BY nome ASC LIMIT ? OFFSET ?', 
-                            (per_page, offset)).fetchall()
-    
-    # 3. Conta quantos clientes existem no total para calcular as páginas
-    total = conn.execute('SELECT COUNT(*) FROM cliente').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
+
+    base_where = ""
+    params_count = []
+    params_list = []
+
+    if cnpj_norm:
+        base_where = """
+            WHERE REPLACE(REPLACE(REPLACE(cnpj_cpf, '.', ''), '-', ''), '/', '') LIKE ?
+        """
+        like = f"%{cnpj_norm}%"
+        params_count = [like]
+        params_list = [like, per_page, offset]
+    else:
+        params_list = [per_page, offset]
+
+    total_row = conn.execute(
+        f"SELECT COUNT(*) AS total FROM cliente {base_where}",
+        params_count
+    ).fetchone()
+
+    total_registros = (total_row["total"] if total_row and total_row["total"] is not None else 0)
+
+    # ✅ Mensagem quando buscar e não achar (mostra só na página 1 pra não “spammar”)
+    if cnpj_norm and total_registros == 0 and page == 1:
+        flash("CPF/CNPJ não localizado", "error")
+
+    clientes = conn.execute(
+        f"""
+        SELECT *
+        FROM cliente
+        {base_where}
+        ORDER BY id_cliente DESC
+        LIMIT ? OFFSET ?
+        """,
+        params_list
+    ).fetchall()
 
     conn.close()
-    
-    # 4. ENVIA AS VARIÁVEIS 'page' e 'total_pages' PARA O HTML
-    return render_template('cliente.html', 
-                           clientes=clientes, 
-                           page=page, 
-                           total_pages=total_pages)
+
+    total_pages = max(1, (total_registros + per_page - 1) // per_page)
+
+    return render_template(
+        'cliente.html',
+        clientes=clientes,
+        page=page,
+        total_pages=total_pages,
+        cnpj=cnpj_busca
+    )
+
+
 
 @app.route('/cadastrar_cliente', methods=['POST'])
 def cadastrar_cliente():
+    nome = (request.form.get('nome') or '').strip()
+    doc_raw = (request.form.get('cnpj_cpf') or '').strip()
+
+    # Normaliza só para checagem (remove . / - espaços etc)
+    doc_norm = re.sub(r'\D', '', doc_raw)
+
+    if not doc_norm:
+        flash('CNPJ/CPF inválido.', 'error')
+        return redirect(url_for('clientes_page'))
+
+    conn = get_db_connection()
+
+    # Checa duplicidade mesmo se o que está no banco estiver formatado
+    existe = conn.execute("""
+        SELECT 1
+        FROM cliente
+        WHERE REPLACE(REPLACE(REPLACE(cnpj_cpf, '.', ''), '-', ''), '/', '') = ?
+        LIMIT 1
+    """, (doc_norm,)).fetchone()
+
+    if existe:
+        conn.close()
+        flash('CNPJ/CPF já existente', 'error')
+        return redirect(url_for('clientes_page'))
+
     dados = (
-        request.form.get('nome'), request.form.get('cnpj_cpf'),
-        request.form.get('ie'), request.form.get('cep'),
-        request.form.get('rua'), request.form.get('cidade'),
+        nome,
+        doc_raw,  # mantém no formato que o usuário digitou (com máscara)
+        request.form.get('ie'),
+        request.form.get('cep'),
+        request.form.get('rua'),
+        request.form.get('cidade'),
         request.form.get('estado')
     )
-    conn = get_db_connection()
+
     conn.execute('INSERT INTO cliente VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)', dados)
     conn.commit()
     conn.close()
-    return redirect('/clientes_page')
+
+    flash('Cliente cadastrado com sucesso!', 'success')
+    return redirect(url_for('clientes_page'))
+
 
 @app.route('/excluir_cliente/<int:id>')
 def excluir_cliente(id):
@@ -300,26 +373,54 @@ from flask import request, render_template, redirect, url_for
 # --- FINANCEIRO: MENU PRINCIPAL ---
 @app.route('/financeiro')
 def financeiro():
+    # 1. ADICIONADO: Captura as datas vindas do filtro HTML
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    
     page = request.args.get('page', 1, type=int)
     per_page = 10
     offset = (page - 1) * per_page
 
     conn = get_db_connection()
+
+    # 2. ADICIONADO: Lógica de filtro para somas e para a tabela
+    filtro_sql = ""
+    params = []
+    if data_inicio and data_fim:
+        filtro_sql = " WHERE dt_vencimento BETWEEN ? AND ?"
+        params = [data_inicio, data_fim]
+
+    # 3. ADICIONADO: Cálculos para os cards (evita o erro de Undefined)
+    # Soma entradas e saídas no período selecionado
+    total_recebido = conn.execute(f"SELECT SUM(valor) FROM contas_a_receber {filtro_sql.replace('WHERE', 'WHERE status = \"PAGO\" AND') if filtro_sql else 'WHERE status = \"PAGO\"'}", params).fetchone()[0] or 0
+    total_pago = conn.execute(f"SELECT SUM(valor) FROM contas_a_Pagar {filtro_sql.replace('WHERE', 'WHERE status = \"PAGO\" AND') if filtro_sql else 'WHERE status = \"PAGO\"'}", params).fetchone()[0] or 0
+    saldo_caixa = total_recebido - total_pago
     
-    contas = conn.execute('''
+    # 4. ALTERADO: Query da tabela para também respeitar o filtro
+    contas = conn.execute(f'''
         SELECT id_contaP, nome_custo, valor, dt_vencimento, status 
         FROM contas_a_Pagar 
+        {filtro_sql}
         ORDER BY status DESC, dt_vencimento ASC 
         LIMIT ? OFFSET ?
-    ''', (per_page, offset)).fetchall()
+    ''', params + [per_page, offset]).fetchall()
 
-    total = conn.execute('SELECT COUNT(*) FROM contas_a_Pagar').fetchone()[0]
+    # Ajuste na contagem total para paginação com filtro
+    total = conn.execute(f'SELECT COUNT(*) FROM contas_a_Pagar {filtro_sql}', params).fetchone()[0]
     total_pages = (total + per_page - 1) // per_page
     
     conn.close()
     
-    # Renderiza o menu consolidado
-    return render_template('financeiro_menu.html', contas=contas, page=page, total_pages=total_pages)
+    # 5. ALTERADO: Return enviando as novas variáveis para o HTML
+    return render_template('financeiro_menu.html', 
+                           contas=contas, 
+                           page=page, 
+                           total_pages=total_pages,
+                           total_recebido=total_recebido,
+                           total_pago=total_pago,
+                           saldo_caixa=saldo_caixa,
+                           data_inicio=data_inicio,
+                           data_fim=data_fim)
 
 
 # --- FINANCEIRO: CONTAS A RECEBER ---
@@ -525,5 +626,33 @@ def faturamento():
                            recebido=recebido, pago=pago, saldo=saldo,
                            pendente_r=pendente_r, pendente_p=pendente_p,
                            vendas=vendas_list, gastos=gastos_list)
+
+
+
+@app.route('/balanco_detalhado')
+def balanco_detalhado():
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+
+    # Inicializa tudo como zero
+    recebido = 0
+    pago = 0
+    sobrou = 0
+
+    # Só faz a conta se as duas datas existirem
+    if data_inicio and data_fim:
+        conn = get_db_connection()
+        filtro = " AND dt_vencimento BETWEEN ? AND ?"
+        params = [data_inicio, data_fim]
+
+        recebido = conn.execute(f"SELECT SUM(valor) FROM contas_a_receber WHERE status IN ('PAGO', 'RECEBIDO') {filtro}", params).fetchone()[0] or 0
+        pago = conn.execute(f"SELECT SUM(valor) FROM contas_a_Pagar WHERE status IN ('PAGO', 'BAIXADO') {filtro}", params).fetchone()[0] or 0
+        sobrou = recebido - pago
+        conn.close()
+    
+    return render_template('balanco_detalhado.html', 
+                           recebido=recebido, pago=pago, sobrou=sobrou,
+                           inicio=data_inicio, fim=data_fim)
+
 if __name__ == '__main__':
     app.run(debug=True)
