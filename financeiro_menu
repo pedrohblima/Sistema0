@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestão de Fluxo de Caixa e Capital</title>
+    <style>
+        :root {
+            --receber: #2ecc71;
+            --pagar: #e74c3c;
+            --faturamento: #3498db;
+            --bg-overlay: rgba(0, 0, 0, 0.7);
+        }
+
+        /* FUNDO TEMÁTICO FINANCEIRO */
+        body { 
+            background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), 
+                              url('https://images.pexels.com/photos/4386339/pexels-photo-4386339.jpeg?auto=compress&cs=tinysrgb&w=1920'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navegação Padronizada no Preto */
+        nav { background: #333; padding: 15px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        nav a { color: white; margin: 0 15px; text-decoration: none; font-weight: bold; font-size: 0.9rem; transition: 0.3s; }
+        nav a:hover { color: #f1c40f; }
+        
+        .container { 
+            flex: 1;
+            padding: 40px 20px; 
+            max-width: 1000px; 
+            margin: auto; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Título em Branco para destacar no fundo */
+        h2 { 
+            color: white; 
+            margin-bottom: 40px; 
+            font-size: 2.2rem; 
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+            border-left: 6px solid #f1c40f;
+            padding-left: 20px;
+        }
+
+        .menu-financeiro {
+    display: grid;
+    /* Força 3 colunas iguais uma ao lado da outra */
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 25px;
+    width: 100%;
+    max-width: 1100px; /* Garante que não estique demais em telas gigantes */
+}
+
+/* Ajuste opcional para dispositivos móveis */
+@media (max-width: 768px) {
+    .menu-financeiro {
+        grid-template-columns: 1fr; /* No celular volta a ser um embaixo do outro */
+    }
+}
+
+        /* BOTÕES ESTILO VIDRO (GLASSMORPHISM) */
+        .btn-fin {
+            padding: 50px 20px;
+            text-decoration: none;
+            color: white;
+            font-weight: 800;
+            font-size: 1.1rem;
+            text-align: center;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-fin:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Cores de Destaque no Hover */
+        .receber:hover { border-bottom: 5px solid var(--receber); }
+        .pagar:hover { border-bottom: 5px solid var(--pagar); }
+        .faturamento:hover { border-bottom: 5px solid var(--faturamento); }
+
+        .btn-fin span { font-size: 45px; transition: 0.3s; }
+        .btn-fin:hover span { transform: scale(1.2); }
+        
+        .stats-footer { margin-top: 50px; color: rgba(255,255,255,0.5); font-size: 0.8rem; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/">MENU</a>
+    <a href="/clientes_page">CLIENTES</a> 
+    <a href="/produtos" class="active">PRODUTOS</a>
+    <a href="/vendas">VENDAS</a>
+</nav>
+
+<div class="container">
+    <h2>💰 Gestão de Fluxo de Caixa e Capital</h2>
+    
+    <div class="menu-financeiro">
+        <a href="/contas_receber" class="btn-fin receber">
+            <span>📈</span>
+            CONTAS A RECEBER
+        </a>
+
+        <a href="/contas_pagar" class="btn-fin pagar">
+            <span>📉</span>
+            CONTAS A PAGAR
+        </a>
+
+        <a href="/faturamento" class="btn-fin faturamento">
+            <span>📊</span>
+            FATURAMENTO / BALANÇO
+        </a>
+    </div>
+
+    <div class="stats-footer">
+        SISTEMA DE GESTÃO FINANCEIRA | 2026
+    </div>
+</div>
+
+</body>
+</html>
