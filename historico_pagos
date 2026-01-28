@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Histórico de Pagamentos</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --success: #2ecc71;
+            --bg-overlay: rgba(0, 0, 0, 0.7);
+        }
+
+        body { 
+            background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), 
+                              url('https://images.pexels.com/photos/4386339/pexels-photo-4386339.jpeg?auto=compress&cs=tinysrgb&w=1920'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 0; color: #333; 
+        }
+        
+        nav { background: #333; padding: 1rem; text-align: center; }
+        nav a { color: white; margin: 0 15px; text-decoration: none; font-weight: 600; font-size: 0.85rem; }
+
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+
+        .header-card { 
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(12px);
+            padding: 20px; border-radius: 12px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); margin-bottom: 25px; 
+            border-left: 10px solid var(--primary);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .table-container { 
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(12px);
+            border-radius: 12px; padding: 25px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); 
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px; color: #7f8c8d; font-size: 0.75rem; text-transform: uppercase; border-bottom: 2px solid #eee; }
+        td { padding: 15px; border-bottom: 1px solid #f1f1f1; font-size: 0.9rem; }
+
+        /* SELO DE PAGO IGUAL AO RECEBER */
+        .badge-pago {
+            background: var(--success);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .pagination { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        .btn-page { text-decoration: none; background: var(--primary); color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/contas_pagar">⬅ VOLTAR PARA SAÍDAS</a>
+    <a href="/">🏠 MENU PRINCIPAL</a>
+</nav>
+
+<div class="container">
+    <div class="header-card">
+        <h2 style="margin:0; color: var(--primary);">📜 Histórico de Contas Pagas</h2>
+        <span style="color: #7f8c8d; font-weight: bold;">Arquivo Geral</span>
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Doc/NF</th>
+                    <th>Categoria</th>
+                    <th>Descrição</th>
+                    <th>Valor Pago</th>
+                    <th>Data Venc.</th>
+                    <th style="text-align: center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conta in contas %}
+                <tr>
+                    <td style="font-weight: 600;">{{ conta.num_doc if conta.num_doc else '-' }}</td>
+                    <td style="color: #718096; font-size: 0.8rem;">{{ conta.categoria }}</td>
+                    <td style="font-weight: 600;">{{ conta.nome_custo }}</td>
+                    <td style="font-weight: 700; color: #2c3e50;">
+                        R$ {{ "{:,.2f}".format(conta.valor | float).replace(',', 'v').replace('.', ',').replace('v', '.') }}
+                    </td>
+                    <td style="color: #718096;">{{ conta.dt_vencimento }}</td>
+                    <td style="text-align: center;">
+                        <span class="badge-pago">✓ PAGO</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('historico_pagamentos', page=page-1) }}" class="btn-page">⬅ Anterior</a>
+            {% endif %}
+            <span style="font-weight: bold; align-self: center;">Página {{ page }} de {{ total_pages }}</span>
+            {% if page < total_pages %}
+                <a href="{{ url_for('historico_pagamentos', page=page+1) }}" class="btn-page">Próxima ➡</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
