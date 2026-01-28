@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Central de Produtos e Modelos</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db; 
+            --bg-overlay: rgba(0, 0, 0, 0.65);
+        }
+
+        body { 
+            background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), 
+                              url('https://images.pexels.com/photos/2089698/pexels-photo-2089698.jpeg?auto=compress&cs=tinysrgb&w=1920'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 0; color: #333; 
+        }
+        
+        nav { background: #333; padding: 15px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        nav a { color: white; margin: 0 15px; text-decoration: none; font-weight: bold; font-size: 0.9rem; transition: 0.3s; }
+        nav a:hover { color: var(--accent); }
+        .active { border-bottom: 2px solid var(--accent); padding-bottom: 5px; }
+
+        .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
+
+        /* Título principal da página */
+        .container > h2 { 
+            color: white !important; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5); 
+        }
+
+        .header-card { 
+            background: rgba(255, 255, 255, 0.94) !important;
+            backdrop-filter: blur(12px);
+            padding: 20px; border-radius: 12px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); margin-bottom: 25px; 
+            border-left: 6px solid var(--accent); 
+        }
+        .header-card h2 { margin: 0; color: var(--primary) !important; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; text-shadow: none !important; }
+
+        .card-form, .table-container { 
+            background: rgba(255, 255, 255, 0.94) !important;
+            backdrop-filter: blur(12px);
+            padding: 25px; border-radius: 12px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); margin-bottom: 30px; 
+        }
+
+        /* Títulos pretos dentro dos cards conforme solicitado */
+        .card-form h3, .table-container h3 { 
+            color: #2c3e50 !important; 
+            text-shadow: none !important; 
+            margin-top: 0; 
+            border-bottom: 1px solid #ddd; 
+            padding-bottom: 15px; 
+            margin-bottom: 20px;
+        }
+
+        .form-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            background: rgba(235, 248, 255, 0.5); 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #bee3f8;
+        }
+        
+        input, select { padding: 12px; border: 1px solid #cbd5e0; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.9rem; background: white; }
+        input:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1); }
+
+        .btn-cadastrar { 
+            padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; 
+            cursor: pointer; font-weight: 800; font-size: 0.9rem; transition: 0.3s; text-transform: uppercase;
+        }
+        .btn-cadastrar:hover { background: #2b6cb0; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px 10px; color: #7f8c8d; font-size: 0.75rem; text-transform: uppercase; border-bottom: 2px solid #eee; }
+        td { padding: 15px 10px; border-bottom: 1px solid #f1f1f1; font-size: 0.9rem; }
+
+        .btn-excluir-x { color: #a0aec0; text-decoration: none; font-weight: bold; font-size: 1.2rem; transition: 0.2s; }
+        .btn-excluir-x:hover { color: #e74c3c; transform: scale(1.2); }
+
+        .pagination {
+            display: flex; justify-content: center; align-items: center; gap: 20px; 
+            margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee;
+        }
+        .btn-page {
+            text-decoration: none; background: var(--primary); color: white; 
+            padding: 8px 16px; border-radius: 5px; font-weight: bold; transition: 0.3s;
+        }
+        .btn-page:hover { background: var(--accent); transform: scale(1.05); }
+        .page-info { font-weight: bold; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/">MENU</a>
+    <a href="/clientes_page">CLIENTES</a> 
+    <a href="/financeiro">FINANCEIRO</a>
+    <a href="/vendas">VENDAS</a>
+</nav>
+
+<div class="container">
+    <div class="header-card">
+        <h2>📦 Central de Produtos e Modelos</h2>
+    </div>
+    
+    <div class="card-form">
+        <h3>➕ Adicionar Novo Produto</h3>
+        <form action="/cadastrar_produto" method="POST" class="form-grid"> 
+            <select name="categoria" required>
+                <option value="" disabled selected>Categoria:</option>
+                <option value="Cadeira">Cadeira</option> 
+                <option value="Armário">Armário</option> 
+                <option value="Aço">Aço</option> 
+                <option value="Mesa">Mesa</option> 
+                <option value="Escolar">Escolar</option> 
+                <option value="Universitário">Universitário</option> 
+                <option value="Gaveteiro">Gaveteiro</option> 
+                <option value="Longarina">Longarina</option> 
+                <option value="Peça">Peça</option> 
+                <option value="Peça">Outros</option> 
+            </select>
+            <input type="text" name="modelo" placeholder="Modelo / Descrição:" required> 
+            <select name="marca" required>
+                <option value="" disabled selected>Marca:</option>
+                <option value="Frisokar">Frisokar</option>
+                <option value="Rhodes">Rhodes</option>
+                <option value="F.Line">F.Line</option>
+                <option value="Cemawe">Cemawe</option>
+                <option value="Art Aço">Art Aço</option>
+                <option value="BaseFlex">BaseFlex</option>
+                <option value="Jahu Flex">Jahu Flex</option>
+                <option value="Jahu Flex">Outros</option>
+            </select>
+            <button type="submit" class="btn-cadastrar">CADASTRAR ITEM</button> 
+        </form>
+    </div>
+    
+    <div class="table-container" id="lista-produtos">
+        <h3>📋 Itens Cadastrados</h3>
+        <form method="GET" action="{{ url_for('produtos') }}" style="display:flex; gap:12px; align-items:flex-end; margin: 15px 0 20px 0;">
+  <div style="flex: 1;">
+    <label style="display:block; font-size:0.75rem; font-weight:800; color:#7f8c8d; margin-bottom:8px;">
+      🔎 Filtrar por categoria
+    </label>
+
+    <select name="categoria" style="width:100%; padding:12px; border:1px solid #cbd5e0; border-radius:6px; background:white;">
+      <option value="">Todas</option>
+      {% for c in categorias %}
+        <option value="{{ c.categoria }}" {% if categoria_sel == c.categoria %}selected{% endif %}>
+          {{ c.categoria }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button type="submit" class="btn-cadastrar" style="width:auto; padding:12px 18px;">
+    Aplicar
+  </button>
+
+  <a href="{{ url_for('produtos') }}#lista-produtos" class="btn-page" style="background:#a0aec0;">
+    Limpar
+  </a>
+</form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th>Categoria</th>
+                    <th>Modelo</th>
+                    <th>Marca</th>
+                    <th style="width: 80px; text-align: center;">Excluir</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for produto in produtos %}
+                <tr>
+                    <td style="color: #a0aec0;">#{{ produto.id_produto }}</td>
+                    <td style="font-weight: 600; color: var(--primary);">{{ produto.categoria }}</td>
+                    <td>{{ produto.modelo }}</td>
+                    <td><span style="background: rgba(237, 242, 247, 0.8); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;">{{ produto.marca }}</span></td>
+                    <td style="text-align: center;">
+                        <a href="/excluir_produto/{{ produto.id_produto }}" 
+                           class="btn-excluir-x" 
+                           onclick="return confirm('Tem certeza que deseja excluir esse produto?')">×</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="pagination">
+           {% if page > 1 %}
+  <a href="{{ url_for('produtos', page=page-1, categoria=categoria_sel) }}#lista-produtos" class="btn-page">⬅ Anterior</a>
+{% endif %}
+
+<span class="page-info">Página {{ page }} de {{ total_pages }}</span>
+
+{% if page < total_pages %}
+  <a href="{{ url_for('produtos', page=page+1, categoria=categoria_sel) }}#lista-produtos" class="btn-page">Próxima ➡</a>
+{% endif %}
+
+        </div>
+    </div>
+</div>
+</body>
+</html>
