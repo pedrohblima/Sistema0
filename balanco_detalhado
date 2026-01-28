@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Balanço Detalhado</title>
+
+    <style>
+        :root {
+            --recebido: #2ecc71;
+            --pago: #e74c3c;
+            --saldo: #3498db;
+            --bg-overlay: rgba(0, 0, 0, 0.8);
+        }
+
+        body { 
+            background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), 
+                              url('https://images.pexels.com/photos/4386339/pexels-photo-4386339.jpeg?auto=compress&cs=tinysrgb&w=1920'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Segoe UI', sans-serif; 
+            margin: 0; 
+            color: white;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh;
+        }
+
+        nav { 
+            width: 100%; 
+            background: #333; 
+            padding: 1rem; 
+            text-align: center; 
+            margin-bottom: 2rem; 
+        }
+
+        nav a { 
+            color: white; 
+            margin: 0 15px; 
+            text-decoration: none; 
+            font-weight: bold; 
+        }
+
+        .container { 
+            width: 90%; 
+            max-width: 850px; 
+            text-align: center; 
+            padding-bottom: 50px; 
+        }
+
+        /* FILTRO (GLASSMORPHISM) */
+        .filtro-fechamento {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .filtro-fechamento input[type="date"] {
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .btn-organizar {
+            background: var(--saldo);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn-organizar:hover {
+            background: #2980b9;
+            transform: scale(1.03);
+        }
+
+        .btn-limpar {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: bold;
+            align-self: center;
+        }
+
+        /* RESULTADO */
+        .resultado-box {
+            background: white;
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            color: #333;
+            border-top: 10px solid var(--recebido);
+            transition: 0.5s;
+        }
+
+        .resultado-box.prejuizo {
+            border-top-color: var(--pago);
+        }
+
+        .label {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .valor-grande {
+            font-size: 4.5rem;
+            font-weight: 900;
+            margin-bottom: 30px;
+            letter-spacing: -2px;
+        }
+
+        .cor-lucro { color: var(--recebido); }
+        .cor-prejuizo { color: var(--pago); }
+
+        .detalhes-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .mini-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border-bottom: 5px solid #ddd;
+        }
+
+        .mini-card.pago {
+            border-bottom-color: var(--pago);
+        }
+
+        .mini-card h4 {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #95a5a6;
+            text-transform: uppercase;
+        }
+
+        .mini-card .valor {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+<nav>
+    <a href="/faturamento">⬅ VOLTAR AO FATURAMENTO</a>
+    <a href="/">🏠 MENU PRINCIPAL</a>
+</nav>
+
+<div class="container">
+    <h2 style="margin-bottom: 30px; font-size: 2rem;">
+        📊 Fechamento de Balanço Geral
+    </h2>
+
+    <div class="filtro-fechamento">
+        <form action="/balanco_detalhado" method="GET" style="display: flex; gap: 15px; align-items: center;">
+            
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="font-weight: bold;">INÍCIO:</label>
+                <input type="date" name="data_inicio" value="{{ inicio or '' }}">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="font-weight: bold;">FIM:</label>
+                <input type="date" name="data_fim" value="{{ fim or '' }}">
+            </div>
+
+            <button type="submit" class="btn-organizar">
+                Organizar Balanço
+            </button>
+
+            <a href="/balanco_detalhado" class="btn-limpar">
+                LIMPAR
+            </a>
+        </form>
+    </div>
+
+    <div class="resultado-box {% if sobrou < 0 %}prejuizo{% endif %}">
+        <div class="label">💰 Quanto sobrou no bolso</div>
+
+        <div class="valor-grande {% if sobrou >= 0 %}cor-lucro{% else %}cor-prejuizo{% endif %}">
+            R$ {{ "{:,.2f}".format(sobrou).replace(',', 'v').replace('.', ',').replace('v', '.') }}
+        </div>
+
+        <div class="detalhes-grid">
+            <div class="mini-card">
+                <h4>📈 Total recebido</h4>
+                <div class="valor" style="color: var(--recebido);">
+                    R$ {{ "{:,.2f}".format(recebido).replace(',', 'v').replace('.', ',').replace('v', '.') }}
+                </div>
+            </div>
+
+            <div class="mini-card pago">
+                <h4>📉 Total pago</h4>
+                <div class="valor" style="color: var(--pago);">
+                    R$ {{ "{:,.2f}".format(pago).replace(',', 'v').replace('.', ',').replace('v', '.') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 40px; font-size: 0.8rem; color: rgba(255,255,255,0.4);">
+        SISTEMA DE FECHAMENTO ABASEFLEX | 2026
+    </div>
+</div>
+
+</body>
+</html>
