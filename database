@@ -1,0 +1,69 @@
+CREATE DATABASE Sistema;
+USE Sistema;
+
+
+CREATE TABLE produto(
+id_produto INTEGER PRIMARY KEY AUTOINCREMENT,
+categoria VARCHAR(50) NOT NULL,
+modelo VARCHAR(100) NOT NULL,
+marca VARCHAR(100) NOT NULL
+);
+
+
+
+CREATE TABLE contas_a_Pagar(
+id_contap INTEGER PRIMARY KEY AUTOINCREMENT,
+categoria VARCHAR(50) NOT NULL,
+nome_custo VARCHAR(50) NOT NULL,
+valor DECIMAL(10,2) NOT NULL,
+num_doc VARCHAR(10),
+dt_vencimento DATE NOT NULL,
+dt_pagto DATE,
+status VARCHAR(20) DEFAULT 'PENDENTE'
+);
+
+
+
+
+CREATE TABLE contas_a_Receber(
+id_contaR INTEGER PRIMARY KEY AUTOINCREMENT,
+id_cliente INT NOT NULL,
+valor DECIMAL(10,2) NOT NULL,
+num_doc VARCHAR(10),
+dt_vencimento DATE NOT NULL,
+dt_pagto DATE,
+status VARCHAR(20) DEFAULT 'PENDENTE',
+FOREIGN KEY(id_cliente) REFERENCES cliente(id_cliente)
+);
+
+
+
+
+CREATE TABLE cliente (
+
+id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+nome VARCHAR(100) NOT NULL,
+cnpj_cpf VARCHAR(20) NOT NULL,
+ie VARCHAR(20),
+cep VARCHAR(20),
+endereço VARCHAR(50),
+cidade    VARCHAR(20),
+estado    VARCHAR(5)
+
+);
+
+CREATE TABLE vendas(
+id_venda   INTEGER PRIMARY KEY AUTOINCREMENT,
+nfe        INT NOT NULL,
+id_cliente INT NOT NULL,
+id_produto INT NOT NULL,
+quantidade INT NOT NULL,
+valorproduto  DECIMAL(10,2) NOT NULL,
+total DECIMAL(10,2) NOT NULL,
+forma_pagto VARCHAR(20) NOT NULL,
+datavenda DATE NOT NULL,
+FOREIGN KEY(id_cliente) REFERENCES cliente(id_cliente),
+FOREIGN KEY(id_produto) REFERENCES Produto(id_produto)
+);
+
+
