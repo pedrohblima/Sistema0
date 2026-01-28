@@ -153,25 +153,63 @@ def excluir_cliente(id):
 # --- GESTÃO DE PRODUTOS ---
 @app.route('/produtos')
 def produtos():
-    # 1. Pega a página atual e define o limite (10 itens)
     page = request.args.get('page', 1, type=int)
     per_page = 10
     offset = (page - 1) * per_page
 
+    categoria_sel = (request.args.get('categoria') or '').strip()
+
     conn = get_db_connection()
-    
-    # 2. Busca apenas os produtos da página
-    lista = conn.execute('SELECT * FROM produto ORDER BY categoria ASC, modelo ASC LIMIT ? OFFSET ?', 
-                         (per_page, offset)).fetchall()
-    
-    # 3. Calcula o total de páginas
-    total = conn.execute('SELECT COUNT(*) FROM produto').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
-    
+
+    where_sql = ""
+    params_count = []
+    params_list = []
+
+    if categoria_sel:
+        where_sql = "WHERE categoria = ?"
+        params_count = [categoria_sel]
+        params_list = [categoria_sel, per_page, offset]
+    else:
+        params_list = [per_page, offset]
+
+    total_row = conn.execute(
+        f"SELECT COUNT(*) AS total FROM produto {where_sql}",
+        params_count
+    ).fetchone()
+    total_registros = (total_row["total"] if total_row and total_row["total"] is not None else 0)
+
+    produtos = conn.execute(
+        f"""
+        SELECT *
+        FROM produto
+        {where_sql}
+        ORDER BY id_produto DESC
+        LIMIT ? OFFSET ?
+        """,
+        params_list
+    ).fetchall()
+
+    # Lista de categorias para o select do filtro (dinâmico)
+    categorias = conn.execute("""
+        SELECT DISTINCT categoria
+        FROM produto
+        WHERE categoria IS NOT NULL AND TRIM(categoria) <> ''
+        ORDER BY categoria ASC
+    """).fetchall()
+
     conn.close()
-    
-    # 4. Envia as variáveis para o HTML
-    return render_template('produtos.html', produtos=lista, page=page, total_pages=total_pages)
+
+    total_pages = max(1, (total_registros + per_page - 1) // per_page)
+
+    return render_template(
+        'produtos.html',
+        produtos=produtos,
+        page=page,
+        total_pages=total_pages,
+        total_registros=total_registros,
+        categorias=categorias,
+        categoria_sel=categoria_sel
+    )
 
 @app.route('/cadastrar_produto', methods=['POST'])
 def cadastrar_produto():
@@ -193,47 +231,76 @@ def excluir_produto(id):
 # --- GESTÃO DE VENDAS E ARQUIVOS ---
 @app.route('/vendas')
 def vendas():
-    # 1. Pega a página atual e define o limite (10 NFEs por tela)
     page = request.args.get('page', 1, type=int)
     per_page = 10
     offset = (page - 1) * per_page
 
+    # filtros (GET)
+    nfe_busca = (request.args.get('nfe') or '').strip()
+    mes_busca = (request.args.get('mes') or '').strip()  # formato YYYY-MM
+
     conn = get_db_connection()
+
+    # combos do form (mantive os seus)
     c = conn.execute('SELECT id_cliente, nome FROM cliente ORDER BY nome ASC').fetchall()
-    p = conn.execute("SELECT id_produto, (categoria || ' ' || modelo) as nome_completo, marca FROM produto").fetchall()
-    
-    # 2. SQL Agrupado com LIMIT e OFFSET para a paginação
-    h = conn.execute('''
-        SELECT 
-            v.nfe, 
-            v.datavenda, 
-            c.nome as nome_cliente, 
-            GROUP_CONCAT(p.categoria || ' ' || p.modelo, ' + ') as nome_produto, 
-            SUM(v.quantidade) as total_qtd, 
-            SUM(v.total) as total_geral, 
+    p = conn.execute(
+        "SELECT id_produto, (categoria || ' ' || modelo) as nome_completo, marca FROM produto"
+    ).fetchall()
+
+    where_sql = ""
+    params_where = []
+
+    # Prioridade: se nfe foi preenchida, filtra por nfe. Senão, filtra por mês.
+    if nfe_busca:
+        where_sql = "WHERE CAST(v.nfe AS TEXT) LIKE ?"
+        params_where = [f"%{nfe_busca}%"]
+    elif mes_busca:
+        # funciona se datavenda estiver 'YYYY-MM-DD'
+        where_sql = "WHERE substr(v.datavenda, 1, 7) = ?"
+        params_where = [mes_busca]
+
+    # 1) Consulta principal paginada
+    h = conn.execute(f'''
+        SELECT
+            v.nfe,
+            v.datavenda,
+            c.nome as nome_cliente,
+            GROUP_CONCAT(p.categoria || ' ' || p.modelo, ' + ') as nome_produto,
+            SUM(v.quantidade) as total_qtd,
+            SUM(v.total) as total_geral,
             v.forma_pagto,
             v.arquivo_nfe
         FROM vendas v
         JOIN cliente c ON v.id_cliente = c.id_cliente
         JOIN produto p ON v.id_produto = p.id_produto
+        {where_sql}
         GROUP BY v.nfe, v.datavenda, c.nome, v.forma_pagto
         ORDER BY v.datavenda DESC, v.nfe DESC
         LIMIT ? OFFSET ?
-    ''', (per_page, offset)).fetchall()
+    ''', (*params_where, per_page, offset)).fetchall()
 
-    # 3. Calcula o total de páginas baseado no número único de notas fiscais
-    total_nfes = conn.execute('SELECT COUNT(DISTINCT nfe) FROM vendas').fetchone()[0]
-    total_pages = (total_nfes + per_page - 1) // per_page
-    
+    # 2) Total de NFEs (distintas) respeitando o filtro
+    total_nfes = conn.execute(f'''
+        SELECT COUNT(DISTINCT v.nfe)
+        FROM vendas v
+        {where_sql}
+    ''', params_where).fetchone()[0] or 0
+
+    total_pages = max(1, (total_nfes + per_page - 1) // per_page)
+
     conn.close()
-    
-    # 4. Retorna todas as variáveis que o seu HTML agora exige
-    return render_template('vendas.html', 
-                           clientes=c, 
-                           produtos=p, 
-                           vendas=h, 
-                           page=page, 
-                           total_pages=total_pages)
+
+    return render_template(
+        'vendas.html',
+        clientes=c,
+        produtos=p,
+        vendas=h,
+        page=page,
+        total_pages=total_pages,
+        nfe=nfe_busca,
+        mes=mes_busca,
+        total_nfes=total_nfes
+    )
 
 @app.route('/salvar_venda', methods=['POST'])
 def salvar_venda():
