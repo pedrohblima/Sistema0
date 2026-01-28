@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Insights de Negócio - Abaseflex</title>
+    <style>
+        /* Cores e fontes originais restauradas */
+        body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
+        
+        /* Barra de navegação preta padronizada */
+        nav { background: #333; padding: 1rem; text-align: center; }
+        nav a { color: white; margin: 0 15px; text-decoration: none; font-weight: 600; font-size: 0.85rem; }
+        
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        
+        /* Título com a borda amarela característica */
+        h1 { color: #2c3e50; border-left: 6px solid #f1c40f; padding-left: 15px; margin-bottom: 30px; }
+
+        .grid-insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+        
+        /* Cards brancos limpos */
+        .insight-card { background: white; border-radius: 15px; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #edf2f7; }
+        .insight-card h3 { margin-top: 0; color: #4a5568; font-size: 1.1rem; border-bottom: 1px solid #f1f1f1; padding-bottom: 15px; margin-bottom: 20px; }
+        
+        /* Alinhamento de tabela mantido para não desalinharem os valores */
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        td, th { padding: 12px 8px; border-bottom: 1px solid #f7fafc; font-size: 0.9rem; vertical-align: middle; }
+        
+        .col-nome { width: 65%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .col-valor { width: 35%; text-align: right; font-weight: 700; color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/vendas">⬅ VOLTAR PARA VENDAS</a>
+    <a href="/">🏠 MENU PRINCIPAL</a>
+</nav>
+
+<div class="container">
+    <h1>💡 Insights</h1>
+
+    <div class="grid-insights">
+        <div class="insight-card">
+            <h3>🏆 Top Produtos (Qtd)</h3>
+            <table>
+                {% for p in produtos %}
+                <tr>
+                    <td class="col-nome">{{ p.produto }}</td>
+                    <td class="col-valor" style="color: #2ecc71;">{{ p.total_qtd }} un</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="insight-card">
+            <h3>💎 Melhores Clientes (R$)</h3>
+            <table>
+                {% for c in clientes %}
+                <tr>
+                    <td class="col-nome">{{ c.nome }}</td>
+                    <td class="col-valor">R$ {{ "{:,.2f}".format(c.total_gasto).replace(',', 'v').replace('.', ',').replace('v', '.') }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="insight-card">
+            <h3>🤝 Clientes Mais Fiéis (Frequência)</h3>
+            <table>
+                <tbody>
+                    {% for f in fidelidade %}
+                    <tr>
+                        <td class="col-nome">{{ f.nome }}</td>
+                        <td class="col-valor" style="color: #3498db;">{{ f.total_pedidos }} compras</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>
